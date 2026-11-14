@@ -1,0 +1,16 @@
+**/.history/
+**/.vs/
+
+**/dist/
+**/build/
+**/target/
+**/bin/
+**/obj/
+
+**/temp/
+**/tmp/
+
+glimpse_of_the_white/lite/config/**
+!glimpse_of_the_white/lite/config/.eow_lite_config_root
+!glimpse_of_the_white/lite/config/example
+!glimpse_of_the_white/lite/config/example/**
