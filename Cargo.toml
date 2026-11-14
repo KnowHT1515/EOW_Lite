@@ -1,0 +1,26 @@
+[workspace]
+resolver = "3"
+members = [
+    "glimpse_of_the_white/lite/eow_lite/supervisor",
+    "glimpse_of_the_white/lite/eow_lite/transport",
+    "glimpse_of_the_white/lite/eow_lite/core",
+    "glimpse_of_the_white/lite/eow_lite/adapter",
+    "glimpse_of_the_white/lite/eow_lite/helper",
+]
+
+
+[workspace.dependencies]
+ctrlc = { version = "3.5", features = ["termination"] }
+eow-lite-helper = { path = "glimpse_of_the_white/lite/eow_lite/helper" }
+rand = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+time = { version = "0.3", features = ["formatting", "parsing"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
+
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.96"

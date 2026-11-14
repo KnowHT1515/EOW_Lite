@@ -1,0 +1,13 @@
+[package]
+name = "eow-lite-helper"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Helper for EOW Lite"
+
+[dependencies]
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }

@@ -1,0 +1,5 @@
+[
+  { "number": "00", "module": "transport", "module_name": "Transport", "MODULE_NAME": "TRANSPORT" },
+  { "number": "07", "module": "adapter",   "module_name": "Adapter",   "MODULE_NAME": "ADAPTER"   },
+  { "number": "77", "module": "core",      "module_name": "Core",      "MODULE_NAME": "CORE"      }
+]

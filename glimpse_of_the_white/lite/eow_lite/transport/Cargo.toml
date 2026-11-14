@@ -1,0 +1,11 @@
+[package]
+name = "eow-lite-transport"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Transport module for EOW Lite"
+
+[dependencies]
+eow-lite-helper = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }

@@ -1,0 +1,15 @@
+[package]
+name = "eow-lite-supervisor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Lifecycle supervisor for EOW Lite"
+
+[dependencies]
+ctrlc = { workspace = true }
+eow-lite-helper = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }

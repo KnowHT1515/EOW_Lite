@@ -1,0 +1,9 @@
+[package]
+name = "eow-lite-adapter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Adapter module for EOW Lite"
+
+[dependencies]
+eow-lite-helper = { workspace = true }

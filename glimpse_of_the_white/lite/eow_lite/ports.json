@@ -1,0 +1,5 @@
+[
+  {"module": "transport", "port": "7700"},
+  {"module": "adapter", "port": "7707"},
+  {"module": "core", "port": "7777"}
+]

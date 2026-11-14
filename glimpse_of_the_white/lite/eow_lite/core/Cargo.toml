@@ -1,0 +1,9 @@
+[package]
+name = "eow-lite-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Core for EOW Lite"
+
+[dependencies]
+eow-lite-helper = { workspace = true }
