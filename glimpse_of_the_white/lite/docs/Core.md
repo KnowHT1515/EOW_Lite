@@ -317,7 +317,7 @@ min_chars = 60                # 单 chunk 最小硬切分触发阈值
         "context_id": "<14digit_string>",   
         "peer_type": "<PeerType>",
         "peer_kind": "<PeerKind>",
-        "peer_id": "<PeerId>",
+        "peer_name": "<PeerName>",
         "time": "<iso8601_utc>",
         "silent": <bool>,
         "content": "<content>"
