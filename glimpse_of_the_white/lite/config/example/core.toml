@@ -1,0 +1,44 @@
+schema = "1.1"
+
+[LLM_Model]
+url = "<model_url>"
+model = "<model_id>"
+api_key = "<model_api_key>"
+# stream = <bool>
+# temperature = "<float>"
+# thinking = <bool>
+
+
+[LLM_Prompt]
+module_block_order = [ 
+    "core",
+    "adapter", 
+]
+module_block_separator = "\n\n---\n\n"
+
+core_block_order = [
+#   { file.root = ".eow_lite_config_root", file.path = "<path>" },
+    { file.root = ".eow_lite_config_root", file.path = "prompt/fields.md" },
+    { file.root = ".eow_lite_config_root", file.path = "prompt/tags.md" },
+]
+core_block_separator = "\n\n"
+
+
+[SentenceSplitter]
+hard_split_tokens = [
+    { tokens = [".", "?", "!"], placement = "previous" },
+    { tokens = [], placement = "discard"},
+    { tokens = [], placement = "next" },
+]
+soft_split_tokens = [                                              
+    { tokens = [",", ";", ":", "—", ")"], placement = "previous" },
+    { tokens = [], placement = "discard"},
+    { tokens = ["("], placement = "next" },
+]
+white_list = []
+tag_begin_tokens = "<k."
+tag_end_tokens = "/>"
+buffer_chars = 15
+target_chars = 180
+max_chars = 240
+min_chars = 60
