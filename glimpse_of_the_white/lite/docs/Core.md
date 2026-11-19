@@ -186,7 +186,7 @@
 {"chunk_id":<int>,"content_type":"<content_type>","content":"<content>"}
 ```
 
-其中 `<content_type>` 的合法枚举值为 [`tag`, `text`]，分别对应常规文本切分与 `Tag` 方法切分
+其中 `<content_type>` 的合法枚举值为 [`text`, `tag`]，分别对应常规文本切分与 `Tag` 方法切分
 
 `chunk` 切分将会原样保留首尾空白，不做处理，特殊规则例外
 
@@ -228,8 +228,8 @@ min_chars = 60                # 单 chunk 最小硬切分触发阈值
 - `white_list` 为白名单字符串集合，使用**精确字符串匹配**，`HardSplit` 与 `SoftSplit` 切分规则对白名单内容不生效
 - `tag_begin_tokens` 与 `tag_end_tokens` 分别为 `Tag` 方法的起始标识与结束标识。对于 `Tag` 方法的识别与切分规则：
     - `Tag` 方法的切分规则不受 `min_chars` 的字符数限制，不受 `hard_split_tokens` 与 `soft_split_tokens` 的规则影响
-    - 当识别到 `tag_begin_tokens` 标识后，将起始标识前的内容切分为 `chunk` 送出，并开启一轮 `Tag` 方法切分
-    - 当识别到 `tag_end_tokens` 标识后，从 `tag_begin_tokens` 标识到 `tag_end_tokens` 标识，将包含两端标识的完整内容作为独立 `chunk` 切分后送出
+    - 当识别到 `tag_begin_tokens` 标识后，进入 `Tag` 切分模式，并将起始标识前已累计的内容记为待发送的 `chunk`。待起始标识的最后一个码点离开缓冲窗口后，发送该 `chunk`
+    - 当识别到 `tag_end_tokens` 标识后，退出 `Tag` 切分模式，从 `tag_begin_tokens` 标识到 `tag_end_tokens` 标识，将包含两端标识的完整内容记为待发送的 `chunk`。待结束标识的最后一个码点离开缓冲窗口后，发送该 `chunk`
     - `Tag` 方法的切分规则仍受 `max_chars` 的字符数限制，若触及 `max_chars` 阈值且向文本末尾方向搜寻 `buffer_chars` 个字符后仍未闭合，则将已累计内容（包括 `tag_begin_tokens`）作为普通文本处理，重新启用常规切分规则尝试进行切分
     - 完成 `Tag` 方法的切分后，恢复常规切分规则
 - `buffer_chars` 为切分器滑动缓冲窗口长度：
@@ -458,7 +458,7 @@ chunk 9: 11
 
    随后识别到 `tag_begin_tokens`: `<k.`
 
-   `Tag` 方法的切分不受 `min_chars` 限制，因此立即将起始标识之前已经累计的内容切分并送出：
+   `Tag` 方法的切分不受 `min_chars` 限制，因此待 `<k.` 离开缓冲窗口后，送出起始标识之前已累计的文本
 
    ```json
    {"chunk_id":2,"content_type":"text","content":" but everyone continued forward "}
@@ -472,7 +472,7 @@ chunk 9: 11
    <k.action:play_sound(bell)/>
    ```
 
-   该 `Tag` 方法已经在 `max_chars` 以内正常闭合，因此将包含起始标识和结束标识的完整内容作为独立 `chunk` 送出：
+   该 `Tag` 方法已经在 `max_chars` 以内正常闭合，因此待 `/>` 离开缓冲窗口后，将包含起始标识和结束标识的完整内容作为独立 `chunk` 送出：
 
    ```json
    {"chunk_id":3,"content_type":"tag","content":"<k.action:play_sound(bell)/>"}
