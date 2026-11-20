@@ -25,9 +25,10 @@ pub enum ExitPolicy {
 }
 
 impl Plan {
+
     pub fn load(directory: &Path) -> io::Result<Self> {
-        let path = directory.join("lifecycle.json");
-        let plan: Self = serde_json::from_slice(&fs::read(&path)?).map_err(|err| {
+        let path: std::path::PathBuf = directory.join("lifecycle.json");
+        let plan: Self = serde_json::from_slice(&fs::read(&path)?).map_err(|err: serde_json::Error| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("{}: {err}", path.display()),
@@ -39,14 +40,13 @@ impl Plan {
                 "invalid lifecycle schema or empty module list",
             ));
         }
-        let mut names = HashSet::new();
+        let mut names: HashSet<&String> = HashSet::new();
         for module in &plan.modules {
             if !names.insert(&module.module)
                 || module.executable.is_empty()
-                || !module
-                    .executable
+                || !module.executable
                     .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+                    .all(|b: u8| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
                 || module.startup_timeout_ms == 0
                 || module.shutdown_timeout_ms == 0
             {
@@ -63,7 +63,7 @@ impl Plan {
         self.supervisor_port
             .parse::<u16>()
             .ok()
-            .filter(|port| *port != 0)
+            .filter(|port: &u16| *port != 0)
             .ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -71,4 +71,5 @@ impl Plan {
                 )
             })
     }
+
 }

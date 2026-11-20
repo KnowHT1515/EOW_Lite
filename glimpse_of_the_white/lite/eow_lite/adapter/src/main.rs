@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-use std::process::ExitCode;
+use std::{path::PathBuf, process::ExitCode};
 
 fn main() -> ExitCode {
     eow_lite_helper::lifecycle::run_idle(

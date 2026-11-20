@@ -6,17 +6,17 @@ pub const MAX_FRAME_BODY: usize = 20 * 1024 * 1024;
 pub const SENTINEL: [u8; 5] = *b"\\eow/";
 
 pub async fn read_frame(reader: &mut (impl AsyncRead + Unpin)) -> io::Result<Option<Vec<u8>>> {
-    let mut prefix = [0; 4];
+    let mut prefix: [u8; 4] = [0; 4];
     if reader.read(&mut prefix[..1]).await? == 0 {
         return Ok(None);
     }
     reader.read_exact(&mut prefix[1..]).await?;
-    let length = u32::from_be_bytes(prefix) as usize;
+    let length: usize = u32::from_be_bytes(prefix) as usize;
     validate_length(length)?;
 
-    let mut body = vec![0; length];
+    let mut body: Vec<u8> = vec![0; length];
     reader.read_exact(&mut body).await?;
-    let mut sentinel = [0; SENTINEL.len()];
+    let mut sentinel: [u8; SENTINEL.len()] = [0; SENTINEL.len()];
     reader.read_exact(&mut sentinel).await?;
     if sentinel != SENTINEL {
         return Err(io::Error::new(

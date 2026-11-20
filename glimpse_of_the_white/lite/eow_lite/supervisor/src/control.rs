@@ -1,12 +1,4 @@
-use std::io::{self, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-    mpsc,
-};
-use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::{io::{self, Read, Write}, net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream}, sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc}, thread::{self, JoinHandle}, time::Duration};
 
 const UNLINK: &[u8] = b"eow-lite unlink\n";
 const STOPPED: &[u8] = b"eow-lite stopped\n";
@@ -19,16 +11,17 @@ pub struct Control {
 }
 
 impl Control {
+
     pub fn bind(port: u16, stopping: Arc<AtomicBool>) -> io::Result<Self> {
-        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port)).map_err(|err| {
+        let listener: TcpListener = TcpListener::bind((Ipv4Addr::LOCALHOST, port)).map_err(|err: io::Error| {
             io::Error::new(
                 err.kind(),
                 format!("cannot bind Supervisor control port {port}: {err}"),
             )
         })?;
         listener.set_nonblocking(true)?;
-        let (done, finished) = mpsc::channel();
-        let thread = thread::spawn(move || serve(listener, stopping, finished));
+        let (done, finished): (mpsc::Sender<bool>, mpsc::Receiver<bool>) = mpsc::channel();
+        let thread: JoinHandle<()> = thread::spawn(move || serve(listener, stopping, finished));
         Ok(Self { done, thread })
     }
 
@@ -36,6 +29,7 @@ impl Control {
         let _ = self.done.send(clean);
         let _ = self.thread.join();
     }
+
 }
 
 fn serve(listener: TcpListener, stopping: Arc<AtomicBool>, finished: mpsc::Receiver<bool>) {
@@ -50,16 +44,16 @@ fn serve(listener: TcpListener, stopping: Arc<AtomicBool>, finished: mpsc::Recei
                     eprintln!("supervisor control: {err}");
                     continue;
                 }
-                let mut request = [0; UNLINK.len()];
+                let mut request: [u8; UNLINK.len()] = [0; UNLINK.len()];
                 if stream.read_exact(&mut request).is_err() || request != UNLINK {
                     continue;
                 }
                 stopping.store(true, Ordering::Release);
-                let clean = finished.recv().unwrap_or(false);
+                let clean: bool = finished.recv().unwrap_or(false);
                 drop(listener);
                 let _ = stream.write_all(if clean { STOPPED } else { STOP_FAILED });
                 return;
-            }
+            },
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
                 if !matches!(
                     finished.recv_timeout(Duration::from_millis(20)),
@@ -67,19 +61,19 @@ fn serve(listener: TcpListener, stopping: Arc<AtomicBool>, finished: mpsc::Recei
                 ) {
                     return;
                 }
-            }
+            },
             Err(err) => {
                 eprintln!("supervisor control: {err}");
                 stopping.store(true, Ordering::Release);
                 return;
-            }
+            },
         }
     }
 }
 
 pub fn unlink(port: u16, timeout: Duration) -> io::Result<()> {
-    let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-    let mut stream = TcpStream::connect_timeout(&address, CONTROL_TIMEOUT).map_err(|err| {
+    let address: SocketAddr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    let mut stream: TcpStream = TcpStream::connect_timeout(&address, CONTROL_TIMEOUT).map_err(|err: io::Error| {
         io::Error::new(
             err.kind(),
             format!("cannot reach EOW Lite Supervisor at {address}: {err}"),
@@ -88,7 +82,7 @@ pub fn unlink(port: u16, timeout: Duration) -> io::Result<()> {
     stream.set_write_timeout(Some(CONTROL_TIMEOUT))?;
     stream.set_read_timeout(Some(timeout))?;
     stream.write_all(UNLINK)?;
-    let mut reply = [0; STOPPED.len()];
+    let mut reply: [u8; STOPPED.len()] = [0; STOPPED.len()];
     stream.read_exact(&mut reply)?;
     if reply != STOPPED {
         return Err(io::Error::other(

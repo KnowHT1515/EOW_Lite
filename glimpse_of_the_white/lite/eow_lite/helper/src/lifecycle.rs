@@ -1,6 +1,4 @@
-use std::io::{self, BufRead, Write};
-use std::path::PathBuf;
-use std::process::ExitCode;
+use std::{io::{self, BufRead, Write}, path::PathBuf, process::ExitCode};
 
 use tokio::sync::oneshot;
 
@@ -15,18 +13,20 @@ pub struct ModuleLifecycle {
 }
 
 impl ModuleLifecycle {
+
     pub fn load(default_directory: PathBuf) -> io::Result<Self> {
-        let mut args = std::env::args_os().skip(1);
-        let first = args.next();
-        let supervised = first.as_deref().is_some_and(|arg| arg == "supervised");
-        let directory = if supervised {
+        let mut args: std::iter::Skip<std::env::ArgsOs> = std::env::args_os().skip(1);
+        let first: Option<std::ffi::OsString> = args.next();
+        let supervised: bool = first.as_deref().is_some_and(|arg: &std::ffi::OsStr| arg == "supervised");
+        let directory: PathBuf = if supervised {
             args.next().map(PathBuf::from).ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::InvalidInput,
                     "missing configuration directory",
                 )
             })?
-        } else {
+        }
+        else {
             first.map(PathBuf::from).unwrap_or(default_directory)
         };
         if args.next().is_some() {
@@ -36,9 +36,9 @@ impl ModuleLifecycle {
             ));
         }
 
-        let shutdown = if supervised {
-            let stdin = io::stdin();
-            let mut line = String::new();
+        let shutdown: Option<oneshot::Receiver<io::Result<()>>> = if supervised {
+            let stdin: io::Stdin = io::stdin();
+            let mut line: String = String::new();
             stdin.read_line(&mut line)?;
             if line.trim_end() != BOOTSTRAP {
                 return Err(io::Error::new(
@@ -46,12 +46,13 @@ impl ModuleLifecycle {
                     "missing bootstrap command",
                 ));
             }
-            let (sender, receiver) = oneshot::channel();
+            let (sender, receiver): (oneshot::Sender<io::Result<()>>, oneshot::Receiver<io::Result<()>>) = oneshot::channel();
             std::thread::spawn(move || {
                 let _ = sender.send(read_shutdown(stdin.lock()));
             });
             Some(receiver)
-        } else {
+        }
+        else {
             None
         };
         Ok(Self {
@@ -63,7 +64,7 @@ impl ModuleLifecycle {
     pub fn module_name(&self, module: &str) -> io::Result<&str> {
         self.registry
             .get(module)
-            .map(|entry| entry.module_name())
+            .map(|entry: &crate::registry::EowLiteModule| entry.module_name())
             .ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -77,7 +78,7 @@ impl ModuleLifecycle {
     }
 
     pub fn into_parts(self) -> (ModuleRegistry, impl Future<Output = io::Result<()>>) {
-        let shutdown = self.shutdown;
+        let shutdown: Option<oneshot::Receiver<io::Result<()>>> = self.shutdown;
         (self.registry, async move {
             match shutdown {
                 Some(receiver) => receiver.await.map_err(io::Error::other)?,
@@ -85,6 +86,7 @@ impl ModuleLifecycle {
             }
         })
     }
+
 }
 
 fn read_shutdown(stdin: impl BufRead) -> io::Result<()> {
@@ -97,20 +99,21 @@ fn read_shutdown(stdin: impl BufRead) -> io::Result<()> {
 }
 
 pub fn announce(module_name: &str, state: &str) -> io::Result<()> {
-    let mut out = io::stdout().lock();
+    let mut out: io::StdoutLock<'_> = io::stdout().lock();
     writeln!(out, "{module_name} {state}")?;
     out.flush()
 }
 
 pub fn run_idle(module: &str, default_directory: PathBuf) -> ExitCode {
     let run = || {
-        let mut lifecycle = ModuleLifecycle::load(default_directory)?;
-        let name = lifecycle.module_name(module)?.to_owned();
+        let mut lifecycle: ModuleLifecycle = ModuleLifecycle::load(default_directory)?;
+        let name: String = lifecycle.module_name(module)?.to_owned();
         announce(&name, "Online")?;
         if let Some(shutdown) = lifecycle.shutdown.take() {
             shutdown.blocking_recv().map_err(io::Error::other)??;
             announce(&name, "Offline")
-        } else {
+        }
+        else {
             loop {
                 std::thread::park();
             }
@@ -121,6 +124,6 @@ pub fn run_idle(module: &str, default_directory: PathBuf) -> ExitCode {
         Err(err) => {
             eprintln!("eow-lite-{module}: {err}");
             ExitCode::FAILURE
-        }
+        },
     }
 }

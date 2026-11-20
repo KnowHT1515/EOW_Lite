@@ -1,21 +1,8 @@
-use std::fmt;
-use std::io;
-use std::net::Ipv4Addr;
-use std::sync::{Arc, Mutex as StateMutex};
-use std::time::Duration;
+use std::{fmt, io, net::Ipv4Addr, sync::{Arc, Mutex as StateMutex}, time::Duration};
 
-use tokio::net::{
-    TcpStream,
-    tcp::{OwnedReadHalf, OwnedWriteHalf},
-};
-use tokio::sync::{Mutex, mpsc, oneshot};
-use tokio::task::JoinHandle;
-use tokio::time::timeout;
+use tokio::{net::{TcpStream, tcp::{OwnedReadHalf, OwnedWriteHalf}}, sync::{Mutex, mpsc, oneshot}, task::JoinHandle, time::timeout};
 
-use crate::control::{
-    HANDSHAKE_SCHEMA, Handshake, HandshakeDenyReason, HandshakeReply, HandshakeRequest,
-    HandshakeResult, SendResult, SendResultFrame,
-};
+use crate::control::{HANDSHAKE_SCHEMA, Handshake, HandshakeDenyReason, HandshakeReply, HandshakeRequest, HandshakeResult, SendResult, SendResultFrame};
 use crate::envelope::EnvelopeLite;
 use crate::registry::ModuleRegistry;
 use crate::tcp::{MAX_FRAME_BODY, read_frame, write_frame};
@@ -31,6 +18,7 @@ pub enum BindingError {
 }
 
 impl fmt::Display for BindingError {
+
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidEnvelope(fields) => write!(f, "invalid envelope: {}", fields.join(", ")),
@@ -41,20 +29,25 @@ impl fmt::Display for BindingError {
             Self::Json(err) => err.fmt(f),
         }
     }
+
 }
 
 impl std::error::Error for BindingError {}
 
 impl From<io::Error> for BindingError {
+
     fn from(err: io::Error) -> Self {
         Self::Io(err)
     }
+
 }
 
 impl From<serde_json::Error> for BindingError {
+
     fn from(err: serde_json::Error) -> Self {
         Self::Json(err)
     }
+
 }
 
 #[derive(Default)]
@@ -64,10 +57,12 @@ struct ReadState {
 }
 
 impl ReadState {
+
     fn close(&mut self) {
         self.closed = true;
         self.pending = None;
     }
+
 }
 
 pub struct Binding {
@@ -81,26 +76,23 @@ pub struct Binding {
 }
 
 impl Binding {
-    pub async fn connect(
-        registry: Arc<ModuleRegistry>,
-        module: &str,
-        deadline: Duration,
-    ) -> Result<Self, BindingError> {
-        let port = registry
+
+    pub async fn connect(registry: Arc<ModuleRegistry>, module: &str, deadline: Duration) -> Result<Self, BindingError> {
+        let port: u16 = registry
             .get("transport")
-            .and_then(|entry| entry.port().parse::<u16>().ok())
-            .filter(|port| *port != 0)
+            .and_then(|entry: &crate::registry::EowLiteModule| entry.port().parse::<u16>().ok())
+            .filter(|port: &u16| *port != 0)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "invalid transport port"))?;
-        let stream = timeout(deadline, async {
-            let mut stream = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).await?;
-            let request = Handshake {
+        let stream: TcpStream = timeout(deadline, async {
+            let mut stream: TcpStream = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).await?;
+            let request: Handshake<HandshakeRequest> = Handshake {
                 handshake: HandshakeRequest {
                     schema: HANDSHAKE_SCHEMA.into(),
                     module: module.into(),
                 },
             };
             write_frame(&mut stream, &serde_json::to_vec(&request)?).await?;
-            let body = read_frame(&mut stream).await?.ok_or(BindingError::Closed)?;
+            let body: Vec<u8> = read_frame(&mut stream).await?.ok_or(BindingError::Closed)?;
             let reply: Handshake<HandshakeReply> = serde_json::from_slice(&body)?;
             match (reply.handshake.result, reply.handshake.reason) {
                 (HandshakeResult::Accept, None) => Ok(stream),
@@ -113,15 +105,15 @@ impl Binding {
         .await
         .map_err(|_| BindingError::Timeout)??;
 
-        let (read_half, write_half) = stream.into_split();
-        let writer = Arc::new(Mutex::new(Some(write_half)));
-        let state = Arc::new(StateMutex::new(ReadState::default()));
+        let (read_half, write_half): (OwnedReadHalf, OwnedWriteHalf) = stream.into_split();
+        let writer: Arc<Mutex<Option<OwnedWriteHalf>>> = Arc::new(Mutex::new(Some(write_half)));
+        let state: Arc<StateMutex<ReadState>> = Arc::new(StateMutex::new(ReadState::default()));
         let (sender, incoming) = mpsc::unbounded_channel();
-        let reader = {
-            let writer = Arc::clone(&writer);
-            let state = Arc::clone(&state);
+        let reader: JoinHandle<()> = {
+            let writer: Arc<Mutex<Option<OwnedWriteHalf>>> = Arc::clone(&writer);
+            let state: Arc<StateMutex<ReadState>> = Arc::clone(&state);
             tokio::spawn(async move {
-                let result = receive_frames(read_half, &state, &sender).await;
+                let result: Result<(), BindingError> = receive_frames(read_half, &state, &sender).await;
                 state.lock().unwrap().close();
                 writer.lock().await.take();
                 if let Err(err) = result {
@@ -141,35 +133,35 @@ impl Binding {
     }
 
     pub async fn send(&self, envelope: &EnvelopeLite) -> Result<SendResult, BindingError> {
-        let violations = envelope.validate_header(&self.registry, &self.module);
+        let violations: Vec<String> = envelope.validate_header(&self.registry, &self.module);
         if !violations.is_empty() {
             return Err(BindingError::InvalidEnvelope(violations));
         }
         if let Err(err) = envelope.validate_payload() {
             return Err(BindingError::InvalidEnvelope(vec![err.to_string()]));
         }
-        let body = serde_json::to_vec(envelope)?;
+        let body: Vec<u8> = serde_json::to_vec(envelope)?;
         if body.len() > MAX_FRAME_BODY {
             return Err(BindingError::InvalidEnvelope(vec![
                 "frame body length".into(),
             ]));
         }
 
-        let mut slot = self.writer.lock().await;
-        let (sender, ack) = oneshot::channel();
-        let mut send = PendingSend {
+        let mut slot: tokio::sync::MutexGuard<'_, Option<OwnedWriteHalf>> = self.writer.lock().await;
+        let (sender, ack): (oneshot::Sender<SendResult>, oneshot::Receiver<SendResult>) = oneshot::channel();
+        let mut send: PendingSend<'_> = PendingSend {
             binding: self,
             writer: Some(slot.take().ok_or(BindingError::Closed)?),
         };
         {
-            let mut state = self.state.lock().unwrap();
+            let mut state: std::sync::MutexGuard<'_, ReadState> = self.state.lock().unwrap();
             if state.closed {
                 return Err(BindingError::Closed);
             }
             state.pending = Some(sender);
         }
 
-        let result = timeout(self.deadline, async {
+        let result: SendResult = timeout(self.deadline, async {
             write_frame(send.writer.as_mut().unwrap(), &body).await?;
             ack.await.map_err(|_| BindingError::Closed)
         })
@@ -182,12 +174,15 @@ impl Binding {
     pub async fn recv(&self) -> Result<Option<EnvelopeLite>, BindingError> {
         self.incoming.lock().await.recv().await.transpose()
     }
+
 }
 
 impl Drop for Binding {
+
     fn drop(&mut self) {
         self.reader.abort();
     }
+
 }
 
 struct PendingSend<'a> {
@@ -196,27 +191,26 @@ struct PendingSend<'a> {
 }
 
 impl Drop for PendingSend<'_> {
+
     fn drop(&mut self) {
         if self.writer.is_some() {
             self.binding.state.lock().unwrap().close();
             self.binding.reader.abort();
         }
     }
+
 }
 
-async fn receive_frames(
-    mut reader: OwnedReadHalf,
-    state: &StateMutex<ReadState>,
-    incoming: &mpsc::UnboundedSender<Result<EnvelopeLite, BindingError>>,
-) -> Result<(), BindingError> {
+async fn receive_frames(mut reader: OwnedReadHalf, state: &StateMutex<ReadState>, incoming: &mpsc::UnboundedSender<Result<EnvelopeLite, BindingError>>) -> Result<(), BindingError> {
     while let Some(body) = read_frame(&mut reader).await? {
         if let Ok(frame) = serde_json::from_slice::<SendResultFrame>(&body) {
-            let pending = state.lock().unwrap().pending.take().ok_or_else(|| {
+            let pending: oneshot::Sender<SendResult> = state.lock().unwrap().pending.take().ok_or_else(|| {
                 io::Error::new(io::ErrorKind::InvalidData, "unexpected send_result")
             })?;
             let _ = pending.send(frame.send_result);
-        } else {
-            let envelope = serde_json::from_slice::<EnvelopeLite>(&body)?;
+        }
+        else {
+            let envelope: EnvelopeLite = serde_json::from_slice::<EnvelopeLite>(&body)?;
             if incoming.send(Ok(envelope)).is_err() {
                 break;
             }

@@ -1,13 +1,9 @@
-use std::io::{self, BufRead, BufReader, Write};
-use std::path::Path;
-use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::mpsc;
-use std::thread;
-use std::time::{Duration, Instant};
+use std::{io::{self, BufRead, BufReader, Write}, path::Path, process::{Child, Command, ExitStatus, Stdio}, sync::mpsc, thread, time::{Duration, Instant}};
 
 use eow_lite_helper::lifecycle::{BOOTSTRAP, SHUTDOWN};
 
-use crate::{plan::ModuleSpec, platform::ProcessContainer};
+use crate::plan::ModuleSpec;
+use crate::platform::ProcessContainer;
 
 pub const POLL_INTERVAL: Duration = Duration::from_millis(25);
 
@@ -27,32 +23,27 @@ pub struct ManagedProcess<'a> {
 }
 
 impl<'a> ManagedProcess<'a> {
-    pub fn spawn(
-        spec: &'a ModuleSpec,
-        name: &'a str,
-        executable: &Path,
-        directory: &Path,
-        container: &ProcessContainer,
-    ) -> io::Result<Self> {
-        let mut command = Command::new(executable);
+
+    pub fn spawn(spec: &'a ModuleSpec, name: &'a str, executable: &Path, directory: &Path, container: &ProcessContainer) -> io::Result<Self> {
+        let mut command: Command = Command::new(executable);
         command
             .arg("supervised")
             .arg(directory)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped());
         container.prepare(&mut command);
-        let mut child = command.spawn()?;
+        let mut child: Child = command.spawn()?;
         if let Err(err) = container.assign(&child) {
             let _ = child.kill();
             let _ = child.wait();
             return Err(err);
         }
 
-        let stdout = child.stdout.take().expect("piped module stdout");
-        let (sender, first_line) = mpsc::channel();
-        let offline_marker = format!("{name} Offline");
-        let stdout_reader = thread::spawn(move || {
-            let mut lines = BufReader::new(stdout).lines();
+        let stdout: std::process::ChildStdout = child.stdout.take().expect("piped module stdout");
+        let (sender, first_line): (mpsc::Sender<io::Result<String>>, mpsc::Receiver<io::Result<String>>) = mpsc::channel();
+        let offline_marker: String = format!("{name} Offline");
+        let stdout_reader: std::thread::JoinHandle<()> = thread::spawn(move || {
+            let mut lines: std::io::Lines<BufReader<std::process::ChildStdout>> = BufReader::new(stdout).lines();
             if let Some(line) = lines.next() {
                 let _ = sender.send(line);
                 for line in lines.map_while(Result::ok) {
@@ -72,7 +63,7 @@ impl<'a> ManagedProcess<'a> {
     }
 
     pub fn bootstrap(&mut self) -> io::Result<()> {
-        let stdin = self.child.stdin.as_mut().expect("piped module stdin");
+        let stdin: &mut std::process::ChildStdin = self.child.stdin.as_mut().expect("piped module stdin");
         writeln!(stdin, "{BOOTSTRAP}")?;
         stdin.flush()
     }
@@ -102,8 +93,8 @@ impl<'a> ManagedProcess<'a> {
     }
 
     pub fn stop(&mut self) -> io::Result<StopOutcome> {
-        let result = self.stop_child();
-        if (result.is_ok() || self.child.try_wait().is_ok_and(|status| status.is_some()))
+        let result: io::Result<StopOutcome> = self.stop_child();
+        if (result.is_ok() || self.child.try_wait().is_ok_and(|status: Option<ExitStatus>| status.is_some()))
             && let Some(reader) = self.stdout_reader.take()
         {
             let _ = reader.join();
@@ -118,17 +109,18 @@ impl<'a> ManagedProcess<'a> {
         if let Some(mut stdin) = self.child.stdin.take() {
             let _ = writeln!(stdin, "{SHUTDOWN}");
         }
-        let timeout = Duration::from_millis(self.spec.shutdown_timeout_ms);
-        let start = Instant::now();
+        let timeout: Duration = Duration::from_millis(self.spec.shutdown_timeout_ms);
+        let start: Instant = Instant::now();
         loop {
             if let Some(status) = self.child.try_wait()? {
                 return if status.success() {
                     Ok(StopOutcome::Graceful)
-                } else {
+                }
+                else {
                     Err(io::Error::other(format!("shutdown exited with {status}")))
                 };
             }
-            let remaining = timeout.saturating_sub(start.elapsed());
+            let remaining: Duration = timeout.saturating_sub(start.elapsed());
             if remaining.is_zero() {
                 eprintln!("{}: shutdown timed out, terminating process", self.name);
                 self.child.kill()?;
@@ -138,4 +130,5 @@ impl<'a> ManagedProcess<'a> {
             thread::sleep(remaining.min(POLL_INTERVAL));
         }
     }
+
 }

@@ -35,6 +35,7 @@ pub struct HandshakeReply {
 }
 
 impl HandshakeReply {
+
     pub fn accept() -> Self {
         Self {
             result: HandshakeResult::Accept,
@@ -48,6 +49,7 @@ impl HandshakeReply {
             reason: Some(reason),
         }
     }
+
 }
 
 #[derive(Debug, Deserialize, Serialize)]

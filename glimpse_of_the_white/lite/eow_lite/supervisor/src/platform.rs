@@ -1,30 +1,23 @@
-use std::{
-    io,
-    process::{Child, Command},
-};
+use std::{io, process::{Child, Command}};
 
 #[cfg(windows)]
 pub struct ProcessContainer(std::os::windows::io::OwnedHandle);
 
 #[cfg(windows)]
 impl ProcessContainer {
+
     pub fn new() -> io::Result<Self> {
         use std::os::windows::io::{AsRawHandle, FromRawHandle};
-        use windows_sys::Win32::System::JobObjects::{
-            CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-            JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
-            SetInformationJobObject,
-        };
+        use windows_sys::Win32::System::JobObjects::{CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation, SetInformationJobObject};
 
-        let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+        let handle: windows_sys::Win32::Foundation::HANDLE = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
         if handle.is_null() {
             return Err(io::Error::last_os_error());
         }
-        // The job has no inheritable handle. Exiting the Supervisor closes it.
-        let job = unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(handle) };
-        let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        let job: std::os::windows::io::OwnedHandle = unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(handle) };
+        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
         limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        let ok = unsafe {
+        let ok: i32 = unsafe {
             SetInformationJobObject(
                 job.as_raw_handle(),
                 JobObjectExtendedLimitInformation,
@@ -47,12 +40,13 @@ impl ProcessContainer {
     pub fn assign(&self, child: &Child) -> io::Result<()> {
         use std::os::windows::io::AsRawHandle;
         use windows_sys::Win32::System::JobObjects::AssignProcessToJobObject;
-        let ok = unsafe { AssignProcessToJobObject(self.0.as_raw_handle(), child.as_raw_handle()) };
+        let ok: i32 = unsafe { AssignProcessToJobObject(self.0.as_raw_handle(), child.as_raw_handle()) };
         if ok == 0 {
             return Err(io::Error::last_os_error());
         }
         Ok(())
     }
+
 }
 
 #[cfg(not(windows))]
@@ -60,6 +54,7 @@ pub struct ProcessContainer;
 
 #[cfg(not(windows))]
 impl ProcessContainer {
+
     pub fn new() -> io::Result<Self> {
         Ok(Self)
     }
@@ -75,4 +70,5 @@ impl ProcessContainer {
     pub fn assign(&self, _child: &Child) -> io::Result<()> {
         Ok(())
     }
+
 }

@@ -39,9 +39,7 @@ pub struct EnvelopeLite {
     pub payload: Box<RawValue>,
 }
 
-fn deserialize_correlation_id<'de, D: Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Option<String>, D::Error> {
+fn deserialize_correlation_id<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
     Option::deserialize(deserializer)
 }
 
@@ -52,35 +50,32 @@ pub enum EnvelopeError {
 }
 
 impl fmt::Display for EnvelopeError {
+
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidField(field) => write!(f, "invalid envelope field: {field}"),
             Self::Json(err) => err.fmt(f),
         }
     }
+
 }
 
 impl std::error::Error for EnvelopeError {}
 
 impl EnvelopeLite {
-    pub fn build(
-        kind: EnvelopeLiteKind,
-        target: &EowLiteModule,
-        source: &EowLiteModule,
-        schema: &str,
-        payload: Payload,
-    ) -> Result<Self, EnvelopeError> {
-        let (envelope_kind, namespace, correlation_id) = match kind {
+
+    pub fn build(kind: EnvelopeLiteKind, target: &EowLiteModule, source: &EowLiteModule, schema: &str, payload: Payload) -> Result<Self, EnvelopeError> {
+        let (envelope_kind, namespace, correlation_id): (EnvelopeKind, &str, Option<String>) = match kind {
             EnvelopeLiteKind::Request => (EnvelopeKind::Request, target.module(), None),
             EnvelopeLiteKind::Event => (EnvelopeKind::Event, source.module(), None),
             EnvelopeLiteKind::Response { correlation_id } => {
                 (EnvelopeKind::Response, "transport", Some(correlation_id))
-            }
+            },
         };
-        let now = OffsetDateTime::now_utc();
-        let (hour, minute, second, millis) = now.to_hms_milli();
-        let suffix = rand::random_range(0..100);
-        let envelope = Self {
+        let now: OffsetDateTime = OffsetDateTime::now_utc();
+        let (hour, minute, second, millis): (u8, u8, u8, u16) = now.to_hms_milli();
+        let suffix: i32 = rand::random_range(0..100);
+        let envelope: Self = Self {
             envelope_schema: ENVELOPE_SCHEMA.into(),
             envelope_kind,
             source: source.module().into(),
@@ -104,7 +99,7 @@ impl EnvelopeLite {
     }
 
     pub fn validate_header(&self, registry: &ModuleRegistry, source: &str) -> Vec<String> {
-        let mut violation = Vec::new();
+        let mut violation: Vec<String> = Vec::new();
         if self.envelope_schema != ENVELOPE_SCHEMA {
             violation.push("envelope_schema".into());
         }
@@ -118,7 +113,7 @@ impl EnvelopeLite {
             || !registry
                 .modules()
                 .iter()
-                .any(|module| module.number() == &self.event_id[1..3])
+                .any(|module: &EowLiteModule| module.number() == &self.event_id[1..3])
         {
             violation.push("event_id".into());
         }
@@ -159,16 +154,15 @@ impl EnvelopeLite {
 
     fn valid_correlation_id(&self) -> bool {
         match self.envelope_kind {
-            EnvelopeKind::Response => self
-                .correlation_id
+            EnvelopeKind::Response => self.correlation_id
                 .as_ref()
-                .is_some_and(|id| !id.is_empty()),
+                .is_some_and(|id: &String| !id.is_empty()),
             _ => self.correlation_id.is_none(),
         }
     }
 
     fn valid_payload_schema(&self) -> bool {
-        let Some((namespace, version)) = self.payload_schema.split_once('@') else {
+        let Some((namespace, version)): Option<(&str, &str)> = self.payload_schema.split_once('@') else {
             return false;
         };
         match self.envelope_kind {
@@ -177,18 +171,19 @@ impl EnvelopeLite {
             EnvelopeKind::Response => self.payload_schema == RESPONSE_SCHEMA,
         }
     }
+
 }
 
 fn valid_version(version: &str) -> bool {
-    version.split_once('.').is_some_and(|(major, minor)| {
+    version.split_once('.').is_some_and(|(major, minor): (&str, &str)| {
         [major, minor]
             .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+            .all(|part: &&str| !part.is_empty() && part.bytes().all(|b: u8| b.is_ascii_digit()))
     })
 }
 
 fn valid_event_id(id: &str) -> bool {
-    let bytes = id.as_bytes();
+    let bytes: &[u8] = id.as_bytes();
     if bytes.len() != 14 || bytes[0] != b'7' || !bytes.iter().all(u8::is_ascii_digit) {
         return false;
     }
