@@ -1,4 +1,4 @@
-use std::{io::{self, BufRead, Write}, path::PathBuf, process::ExitCode};
+use std::{io::{self, BufRead, Write}, path::{Path, PathBuf}, process::ExitCode};
 
 use tokio::sync::oneshot;
 
@@ -9,6 +9,7 @@ pub const SHUTDOWN: &str = "shutdown";
 
 pub struct ModuleLifecycle {
     pub registry: ModuleRegistry,
+    directory: PathBuf,
     shutdown: Option<oneshot::Receiver<io::Result<()>>>,
 }
 
@@ -56,9 +57,14 @@ impl ModuleLifecycle {
             None
         };
         Ok(Self {
-            registry: ModuleRegistry::load(directory)?,
+            registry: ModuleRegistry::load(&directory)?,
+            directory,
             shutdown,
         })
+    }
+
+    pub fn directory(&self) -> &Path {
+        &self.directory
     }
 
     pub fn module_name(&self, module: &str) -> io::Result<&str> {

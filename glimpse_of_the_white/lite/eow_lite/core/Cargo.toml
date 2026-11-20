@@ -7,3 +7,11 @@ description = "Core for EOW Lite"
 
 [dependencies]
 eow-lite-helper = { workspace = true }
+ctrlc = { workspace = true }
+futures-util = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+toml = { workspace = true }
