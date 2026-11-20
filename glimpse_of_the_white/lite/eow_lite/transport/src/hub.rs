@@ -1,6 +1,7 @@
-use std::{collections::{HashMap, hash_map::Entry}, io, sync::{Arc, Mutex}, time::Duration};
+use std::{collections::{HashMap, HashSet, hash_map::Entry}, io, sync::{Arc, Mutex}, time::Duration};
 
-use eow_lite_helper::control::{HANDSHAKE_SCHEMA, Handshake, HandshakeDenyReason, HandshakeReply, SendResultFrame};
+use eow_lite_helper::control::{HANDSHAKE_SCHEMA, Handshake, HandshakeDenyReason, HandshakeReply, SendResultFrame, SubscriptionReply, SubscriptionRequest};
+use eow_lite_helper::envelope::valid_topic;
 use eow_lite_helper::tcp::{read_frame, write_frame};
 use eow_lite_helper::{EnvelopeKind, EnvelopeLite, EnvelopeLiteKind, ModuleRegistry, SendResult};
 use serde_json::{Value, json};
@@ -11,7 +12,13 @@ type Outbound = mpsc::UnboundedSender<Vec<u8>>;
 
 struct Hub {
     registry: ModuleRegistry,
-    online: Mutex<HashMap<String, Outbound>>,
+    routing: Mutex<RoutingState>,
+}
+
+#[derive(Default)]
+struct RoutingState {
+    online: HashMap<String, Outbound>,
+    subscriptions: HashMap<String, HashSet<String>>,
 }
 
 struct Registration<'a> {
@@ -22,7 +29,12 @@ struct Registration<'a> {
 impl Drop for Registration<'_> {
 
     fn drop(&mut self) {
-        self.hub.online.lock().unwrap().remove(&self.module);
+        let mut routing: std::sync::MutexGuard<'_, RoutingState> = self.hub.routing.lock().unwrap();
+        routing.online.remove(&self.module);
+        routing.subscriptions.retain(|_, subscribers: &mut HashSet<String>| {
+            subscribers.remove(&self.module);
+            !subscribers.is_empty()
+        });
     }
 
 }
@@ -30,7 +42,7 @@ impl Drop for Registration<'_> {
 pub async fn serve(listener: TcpListener, registry: ModuleRegistry) -> io::Result<()> {
     let hub: Arc<Hub> = Arc::new(Hub {
         registry,
-        online: Mutex::new(HashMap::new()),
+        routing: Mutex::new(RoutingState::default()),
     });
     loop {
         let (stream, peer): (TcpStream, std::net::SocketAddr) = listener.accept().await?;
@@ -91,8 +103,8 @@ impl Hub {
             .and_then(Value::as_str)
             .filter(|module: &&str| *module != "transport" && self.registry.get(module).is_some())
             .ok_or(HandshakeDenyReason::InvalidModule)?;
-        let mut online: std::sync::MutexGuard<'_, HashMap<String, Outbound>> = self.online.lock().unwrap();
-        match online.entry(module.into()) {
+        let mut routing: std::sync::MutexGuard<'_, RoutingState> = self.routing.lock().unwrap();
+        match routing.online.entry(module.into()) {
             Entry::Occupied(_) => Err(HandshakeDenyReason::ModuleInUse),
             Entry::Vacant(entry) => {
                 let reply: Vec<u8> =
@@ -108,6 +120,9 @@ impl Hub {
     }
 
     fn submit(&self, body: Vec<u8>, module: &str, out: &Outbound) -> io::Result<()> {
+        if let Ok(request) = serde_json::from_slice::<SubscriptionRequest>(&body) {
+            return self.subscription(request, module, out);
+        }
         let envelope: EnvelopeLite = match serde_json::from_slice(&body) {
             Ok(envelope) => envelope,
             Err(_) => return send_result(out, vec!["invalid_envelope".into()]),
@@ -119,7 +134,19 @@ impl Hub {
             return Ok(());
         }
 
-        let target: Option<Outbound> = self.online.lock().unwrap().get(&envelope.target).cloned();
+        if envelope.envelope_kind == EnvelopeKind::Event {
+            let routing: std::sync::MutexGuard<'_, RoutingState> = self.routing.lock().unwrap();
+            if let Some(subscribers) = routing.subscriptions.get(&envelope.target) {
+                for module in subscribers {
+                    if let Some(subscriber) = routing.online.get(module) {
+                        let _ = subscriber.send(body.clone());
+                    }
+                }
+            }
+            return Ok(());
+        }
+
+        let target: Option<Outbound> = self.routing.lock().unwrap().online.get(&envelope.target).cloned();
         if target.is_some_and(|target: Outbound| target.send(body).is_ok()) {
             return Ok(());
         }
@@ -153,6 +180,28 @@ impl Hub {
             enqueue(out, serde_json::to_vec(&failure)?)?;
         }
         Ok(())
+    }
+
+    fn subscription(&self, request: SubscriptionRequest, module: &str, out: &Outbound) -> io::Result<()> {
+        if !valid_topic(request.topic(), &self.registry) {
+            return send_result(out, vec!["topic".into()]);
+        }
+        let reply: SubscriptionReply = request.reply();
+        let mut routing: std::sync::MutexGuard<'_, RoutingState> = self.routing.lock().unwrap();
+        match request {
+            SubscriptionRequest::Subscribe { topic } => {
+                routing.subscriptions.entry(topic).or_default().insert(module.into());
+            },
+            SubscriptionRequest::Unsubscribe { topic } => {
+                if let Some(subscribers) = routing.subscriptions.get_mut(&topic) {
+                    subscribers.remove(module);
+                    if subscribers.is_empty() {
+                        routing.subscriptions.remove(&topic);
+                    }
+                }
+            },
+        }
+        enqueue(out, serde_json::to_vec(&reply)?)
     }
 
 }

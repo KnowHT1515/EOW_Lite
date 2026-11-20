@@ -64,9 +64,10 @@ impl std::error::Error for EnvelopeError {}
 
 impl EnvelopeLite {
 
-    pub fn build(kind: EnvelopeLiteKind, target: &EowLiteModule, source: &EowLiteModule, schema: &str, payload: Payload) -> Result<Self, EnvelopeError> {
+    pub fn build(kind: EnvelopeLiteKind, target: impl AsRef<str>, source: &EowLiteModule, schema: &str, payload: Payload) -> Result<Self, EnvelopeError> {
+        let target: &str = target.as_ref();
         let (envelope_kind, namespace, correlation_id): (EnvelopeKind, &str, Option<String>) = match kind {
-            EnvelopeLiteKind::Request => (EnvelopeKind::Request, target.module(), None),
+            EnvelopeLiteKind::Request => (EnvelopeKind::Request, target, None),
             EnvelopeLiteKind::Event => (EnvelopeKind::Event, source.module(), None),
             EnvelopeLiteKind::Response { correlation_id } => {
                 (EnvelopeKind::Response, "transport", Some(correlation_id))
@@ -79,7 +80,7 @@ impl EnvelopeLite {
             envelope_schema: ENVELOPE_SCHEMA.into(),
             envelope_kind,
             source: source.module().into(),
-            target: target.module().into(),
+            target: target.into(),
             event_id: format!(
                 "7{}{hour:02}{minute:02}{second:02}{millis:03}{suffix:02}",
                 source.number(),
@@ -106,7 +107,11 @@ impl EnvelopeLite {
         if self.source != source || registry.get(&self.source).is_none() {
             violation.push("source".into());
         }
-        if registry.get(&self.target).is_none() {
+        let target_valid: bool = match self.envelope_kind {
+            EnvelopeKind::Event => valid_topic(&self.target, registry),
+            _ => registry.get(&self.target).is_some(),
+        };
+        if !target_valid {
             violation.push("target".into());
         }
         if !valid_event_id(&self.event_id)
@@ -172,6 +177,15 @@ impl EnvelopeLite {
         }
     }
 
+}
+
+pub fn valid_topic(topic: &str, registry: &ModuleRegistry) -> bool {
+    let Some((module, suffix)): Option<(&str, &str)> = topic.split_once('.') else {
+        return false;
+    };
+    !suffix.is_empty()
+        && registry.get(module).is_some()
+        && topic.bytes().all(|byte: u8| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'@'))
 }
 
 fn valid_version(version: &str) -> bool {

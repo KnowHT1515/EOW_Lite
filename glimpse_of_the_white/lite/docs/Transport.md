@@ -73,7 +73,7 @@
     "envelope_schema": "1.0",
     "envelope_kind": "request" | "response" | "event",
     "source": "<module>",
-    "target": "<module>",
+    "target": "<module>" | "<topic>",
     "event_id": "<14digit_string>",
     "correlation_id": null | "<14digit_string>",
     "ts_utc": "<iso8601_utc>",

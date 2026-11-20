@@ -62,3 +62,34 @@ pub struct SendResult {
     pub ok: bool,
     pub violation: Vec<String>,
 }
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubscriptionRequest {
+    Subscribe { topic: String },
+    Unsubscribe { topic: String },
+}
+
+impl SubscriptionRequest {
+
+    pub fn topic(&self) -> &str {
+        match self {
+            Self::Subscribe { topic } | Self::Unsubscribe { topic } => topic,
+        }
+    }
+
+    pub fn reply(&self) -> SubscriptionReply {
+        match self {
+            Self::Subscribe { topic } => SubscriptionReply::Subscribed { topic: topic.clone() },
+            Self::Unsubscribe { topic } => SubscriptionReply::Unsubscribed { topic: topic.clone() },
+        }
+    }
+
+}
+
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubscriptionReply {
+    Subscribed { topic: String },
+    Unsubscribed { topic: String },
+}

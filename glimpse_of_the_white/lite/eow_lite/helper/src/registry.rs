@@ -77,6 +77,14 @@ impl EowLiteModule {
 
 }
 
+impl AsRef<str> for EowLiteModule {
+
+    fn as_ref(&self) -> &str {
+        self.module()
+    }
+
+}
+
 #[derive(Debug)]
 pub struct ModuleRegistry {
     modules: Vec<EowLiteModule>,

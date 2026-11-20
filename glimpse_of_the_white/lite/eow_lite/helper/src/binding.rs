@@ -2,8 +2,8 @@ use std::{fmt, io, net::Ipv4Addr, sync::{Arc, Mutex as StateMutex}, time::Durati
 
 use tokio::{net::{TcpStream, tcp::{OwnedReadHalf, OwnedWriteHalf}}, sync::{Mutex, mpsc, oneshot}, task::JoinHandle, time::timeout};
 
-use crate::control::{HANDSHAKE_SCHEMA, Handshake, HandshakeDenyReason, HandshakeReply, HandshakeRequest, HandshakeResult, SendResult, SendResultFrame};
-use crate::envelope::EnvelopeLite;
+use crate::control::{HANDSHAKE_SCHEMA, Handshake, HandshakeDenyReason, HandshakeReply, HandshakeRequest, HandshakeResult, SendResult, SendResultFrame, SubscriptionReply, SubscriptionRequest};
+use crate::envelope::{EnvelopeLite, valid_topic};
 use crate::registry::ModuleRegistry;
 use crate::tcp::{MAX_FRAME_BODY, read_frame, write_frame};
 
@@ -53,7 +53,12 @@ impl From<serde_json::Error> for BindingError {
 #[derive(Default)]
 struct ReadState {
     closed: bool,
-    pending: Option<oneshot::Sender<SendResult>>,
+    pending: Option<oneshot::Sender<OperationReply>>,
+}
+
+enum OperationReply {
+    Send(SendResult),
+    Subscription(SubscriptionReply),
 }
 
 impl ReadState {
@@ -141,6 +146,34 @@ impl Binding {
             return Err(BindingError::InvalidEnvelope(vec![err.to_string()]));
         }
         let body: Vec<u8> = serde_json::to_vec(envelope)?;
+        match self.exchange(&body).await? {
+            OperationReply::Send(result) => Ok(result),
+            _ => Err(io::Error::new(io::ErrorKind::InvalidData, "unexpected subscription reply").into()),
+        }
+    }
+
+    pub async fn subscribe(&self, topic: &str) -> Result<(), BindingError> {
+        self.subscription(SubscriptionRequest::Subscribe { topic: topic.into() }).await
+    }
+
+    pub async fn unsubscribe(&self, topic: &str) -> Result<(), BindingError> {
+        self.subscription(SubscriptionRequest::Unsubscribe { topic: topic.into() }).await
+    }
+
+    async fn subscription(&self, request: SubscriptionRequest) -> Result<(), BindingError> {
+        if !valid_topic(request.topic(), &self.registry) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid subscription topic").into());
+        }
+        let expected: SubscriptionReply = request.reply();
+        let body: Vec<u8> = serde_json::to_vec(&request)?;
+        match self.exchange(&body).await? {
+            OperationReply::Subscription(reply) if reply == expected => Ok(()),
+            OperationReply::Send(result) if !result.ok => Err(BindingError::InvalidEnvelope(result.violation)),
+            _ => Err(io::Error::new(io::ErrorKind::InvalidData, "unexpected subscription reply").into()),
+        }
+    }
+
+    async fn exchange(&self, body: &[u8]) -> Result<OperationReply, BindingError> {
         if body.len() > MAX_FRAME_BODY {
             return Err(BindingError::InvalidEnvelope(vec![
                 "frame body length".into(),
@@ -148,8 +181,8 @@ impl Binding {
         }
 
         let mut slot: tokio::sync::MutexGuard<'_, Option<OwnedWriteHalf>> = self.writer.lock().await;
-        let (sender, ack): (oneshot::Sender<SendResult>, oneshot::Receiver<SendResult>) = oneshot::channel();
-        let mut send: PendingSend<'_> = PendingSend {
+        let (sender, ack): (oneshot::Sender<OperationReply>, oneshot::Receiver<OperationReply>) = oneshot::channel();
+        let mut send: PendingWrite<'_> = PendingWrite {
             binding: self,
             writer: Some(slot.take().ok_or(BindingError::Closed)?),
         };
@@ -161,8 +194,8 @@ impl Binding {
             state.pending = Some(sender);
         }
 
-        let result: SendResult = timeout(self.deadline, async {
-            write_frame(send.writer.as_mut().unwrap(), &body).await?;
+        let result: OperationReply = timeout(self.deadline, async {
+            write_frame(send.writer.as_mut().unwrap(), body).await?;
             ack.await.map_err(|_| BindingError::Closed)
         })
         .await
@@ -185,12 +218,12 @@ impl Drop for Binding {
 
 }
 
-struct PendingSend<'a> {
+struct PendingWrite<'a> {
     binding: &'a Binding,
     writer: Option<OwnedWriteHalf>,
 }
 
-impl Drop for PendingSend<'_> {
+impl Drop for PendingWrite<'_> {
 
     fn drop(&mut self) {
         if self.writer.is_some() {
@@ -203,11 +236,20 @@ impl Drop for PendingSend<'_> {
 
 async fn receive_frames(mut reader: OwnedReadHalf, state: &StateMutex<ReadState>, incoming: &mpsc::UnboundedSender<Result<EnvelopeLite, BindingError>>) -> Result<(), BindingError> {
     while let Some(body) = read_frame(&mut reader).await? {
-        if let Ok(frame) = serde_json::from_slice::<SendResultFrame>(&body) {
-            let pending: oneshot::Sender<SendResult> = state.lock().unwrap().pending.take().ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidData, "unexpected send_result")
+        let reply: Option<OperationReply> = if let Ok(frame) = serde_json::from_slice::<SendResultFrame>(&body) {
+            Some(OperationReply::Send(frame.send_result))
+        }
+        else if let Ok(reply) = serde_json::from_slice::<SubscriptionReply>(&body) {
+            Some(OperationReply::Subscription(reply))
+        }
+        else {
+            None
+        };
+        if let Some(reply) = reply {
+            let pending: oneshot::Sender<OperationReply> = state.lock().unwrap().pending.take().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "unexpected operation reply")
             })?;
-            let _ = pending.send(frame.send_result);
+            let _ = pending.send(reply);
         }
         else {
             let envelope: EnvelopeLite = serde_json::from_slice::<EnvelopeLite>(&body)?;
