@@ -65,12 +65,9 @@
 
 ```json
 {   
-    "topic": "core.llm_context",
-    "data": {
-        "context_type": "inbound",
-        "context_id": "<14digit_string>",
-        "content": "<content>"
-    }
+    "context_type": "inbound",
+    "context_id": "<14digit_string>",
+    "content": "<content>"
 }
 ```
 
@@ -137,14 +134,11 @@
 
 ```json
 {
-    "topic": "core.llm_context",
-    "data": {
-        "context_type": "outbound",
-        "context_id": "<14digit_string>",
-        "chunk_id": <int>,
-        "content_type": "<content_type>",
-        "content": "<content>"
-    }
+    "context_type": "outbound",
+    "context_id": "<14digit_string>",
+    "chunk_id": <int>,
+    "content_type": "<content_type>",
+    "content": "<content>"
 }
 ```
 
@@ -156,11 +150,8 @@
 
 ```json
 {
-    "topic": "core.llm_context",
-    "data": {
-        "context_type": "outbound_end",
-        "context_id": "<14digit_string>"
-    }
+    "context_type": "outbound_end",
+    "context_id": "<14digit_string>"
 }
 ```
 
