@@ -5,13 +5,15 @@ members = [
     "glimpse_of_the_white/lite/eow_lite/transport",
     "glimpse_of_the_white/lite/eow_lite/core",
     "glimpse_of_the_white/lite/eow_lite/adapter",
+    "glimpse_of_the_white/lite/eow_lite/ui",
     "glimpse_of_the_white/lite/eow_lite/helper",
 ]
 
 
 [workspace.dependencies]
-ctrlc = { version = "3.5", features = ["termination"] }
 eow-lite-helper = { path = "glimpse_of_the_white/lite/eow_lite/helper" }
+ctrlc = { version = "3.5", features = ["termination"] }
+crossterm = "0.29"
 futures-util = "0.3"
 rand = "0.10"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
@@ -20,7 +22,9 @@ serde_json = { version = "1", features = ["raw_value"] }
 time = { version = "0.3", features = ["formatting", "parsing"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
 toml = "0.8"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
+unicode-segmentation = "1.13"
+unicode-width = "0.2"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Com", "Win32_System_Registry", "Win32_System_Console", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse"] }
 
 
 [workspace.package]

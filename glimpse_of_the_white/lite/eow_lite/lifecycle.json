@@ -4,6 +4,7 @@
   "modules": [
     { "module": "transport", "executable": "eow-lite-transport", "startup_timeout_ms": 30000, "shutdown_timeout_ms": 5000, "unexpected_exit_policy": "shutdown" },
     { "module": "core",      "executable": "eow-lite-core",      "startup_timeout_ms": 30000, "shutdown_timeout_ms": 5000, "unexpected_exit_policy": "shutdown" },
-    { "module": "adapter",   "executable": "eow-lite-adapter",   "startup_timeout_ms": 30000, "shutdown_timeout_ms": 5000, "unexpected_exit_policy": "shutdown" }
+    { "module": "adapter",   "executable": "eow-lite-adapter",   "startup_timeout_ms": 30000, "shutdown_timeout_ms": 5000, "unexpected_exit_policy": "shutdown" },
+    { "module": "ui",        "executable": "eow-lite-ui",        "startup_timeout_ms": 30000, "shutdown_timeout_ms": 5000, "unexpected_exit_policy": "shutdown" }
   ]
 }

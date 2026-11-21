@@ -1,0 +1,26 @@
+[package]
+name = "eow-lite-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "UI module for EOW Lite"
+
+[[bin]]
+name = "eow-lite-ui"
+path = "src/main.rs"
+
+[[bin]]
+name = "eow-lite-ui-terminal"
+path = "src/terminal_main.rs"
+
+[dependencies]
+ctrlc = { workspace = true }
+crossterm = { workspace = true }
+eow-lite-helper = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+unicode-segmentation = { workspace = true }
+unicode-width = { workspace = true }
+windows-sys = { workspace = true }
