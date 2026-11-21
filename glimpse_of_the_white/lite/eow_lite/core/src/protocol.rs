@@ -14,7 +14,12 @@ pub const SILENT_TAG: &str = "<k.action:silent/>";
 #[serde(tag = "operation", deny_unknown_fields)]
 pub enum Request {
     #[serde(rename = "text.inbound")]
-    Inbound { permanent: bool, inbound: Inbound },
+    Inbound {
+        #[serde(default)]
+        private: bool,
+        permanent: bool,
+        inbound: Inbound,
+    },
     #[serde(rename = "text.push_prompt")]
     PushPrompt { module: String, prompt: String },
 }
@@ -75,11 +80,13 @@ pub enum ContentType {
 #[serde(tag = "context_type", rename_all = "snake_case")]
 pub enum ContextEvent<'a> {
     Inbound {
+        private: bool,
         context_id: &'a str,
         content: &'a str,
     },
     Outbound {
         context_id: &'a str,
+        private: bool,
         chunk_id: usize,
         content_type: ContentType,
         content: &'a str,

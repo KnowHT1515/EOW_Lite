@@ -79,6 +79,9 @@ async fn receive(session: &mut Session, binding: &Binding, registry: &ModuleRegi
                             && pending.as_ref() == Some(context_id) {
                             pending = None;
                         }
+                        if matches!(&event, ContextEvent::Inbound { private: true, .. } | ContextEvent::Outbound { private: true, .. }) {
+                            continue;
+                        }
                         session.send(&ServerMessage::Context { event }).await?;
                     },
                     _ => {},
@@ -93,6 +96,7 @@ fn inbound(registry: &ModuleRegistry, content: &str) -> io::Result<EnvelopeLite>
     let mut envelope: EnvelopeLite = EnvelopeLite::build(EnvelopeLiteKind::Request, "core", source, "1.1", Payload::new()).map_err(io::Error::other)?;
     envelope.payload = serde_json::value::to_raw_value(&json!({
         "operation": "text.inbound",
+        "private": false,
         "permanent": true,
         "inbound": {
             "context_id": envelope.event_id,

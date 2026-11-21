@@ -89,7 +89,7 @@ impl Runtime {
                     .map(|error: io::Error| error.to_string());
                 self.channel.reply(&envelope, error.as_deref()).await
             },
-            Request::Inbound { permanent, inbound } => {
+            Request::Inbound { private, permanent, inbound } => {
                 if self.active.is_some() {
                     return self.channel.reply(&envelope, Some("busy")).await;
                 }
@@ -110,6 +110,7 @@ impl Runtime {
                     inbound,
                     compact,
                     messages,
+                    private,
                     permanent,
                 };
                 self.active = Some(tokio::spawn(turn.run()));
@@ -186,11 +187,12 @@ impl Channel {
         .await
     }
 
-    async fn chunks(&self, context_id: &str, next_id: &mut usize, chunks: Vec<SplitCandidate>) -> io::Result<()> {
+    async fn chunks(&self, context_id: &str, private: bool, next_id: &mut usize, chunks: Vec<SplitCandidate>) -> io::Result<()> {
         for chunk in chunks {
             let (content_type, content): (crate::protocol::ContentType, String) = chunk.into_parts();
             self.event(ContextEvent::Outbound {
                 context_id,
+                private,
                 chunk_id: *next_id,
                 content_type,
                 content: &content,
@@ -216,6 +218,7 @@ struct Turn {
     inbound: Inbound,
     compact: String,
     messages: Vec<Message>,
+    private: bool,
     permanent: bool,
 }
 
@@ -240,6 +243,7 @@ impl Turn {
     async fn generate(&self) -> io::Result<String> {
         self.channel
             .event(ContextEvent::Inbound {
+                private: self.private,
                 context_id: &self.inbound.context_id,
                 content: &self.compact,
             })
@@ -273,6 +277,7 @@ impl Turn {
                     self.channel
                         .chunks(
                             &self.inbound.context_id,
+                            self.private,
                             &mut next_id,
                             splitter.push_str(&content),
                         )
@@ -280,7 +285,7 @@ impl Turn {
                 }
                 if delta.finished {
                     self.channel
-                        .chunks(&self.inbound.context_id, &mut next_id, splitter.finish())
+                        .chunks(&self.inbound.context_id, self.private, &mut next_id, splitter.finish())
                         .await?;
                     return Ok(outbound);
                 }
@@ -292,6 +297,7 @@ impl Turn {
         self.channel
             .chunks(
                 &self.inbound.context_id,
+                self.private,
                 next_id,
                 SentenceSplitter::split(Arc::clone(&self.splitter), outbound),
             )

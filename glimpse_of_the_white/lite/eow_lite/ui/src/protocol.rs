@@ -22,8 +22,20 @@ pub enum ServerMessage {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "context_type", rename_all = "snake_case")]
 pub enum ContextEvent {
-    Inbound { context_id: String, content: String },
-    Outbound { context_id: String, chunk_id: usize, content_type: ContentType, content: String },
+    Inbound {
+        #[serde(default)]
+        private: bool,
+        context_id: String,
+        content: String,
+    },
+    Outbound {
+        context_id: String,
+        #[serde(default)]
+        private: bool,
+        chunk_id: usize,
+        content_type: ContentType,
+        content: String,
+    },
     OutboundEnd { context_id: String },
 }
 

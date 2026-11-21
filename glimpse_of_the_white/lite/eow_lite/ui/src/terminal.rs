@@ -6,7 +6,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use windows_sys::Win32::{Foundation::HANDLE, System::Console::{ENABLE_ECHO_INPUT, ENABLE_EXTENDED_FLAGS, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_QUICK_EDIT_MODE, ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_WINDOW_INPUT, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, GetConsoleMode, GetStdHandle, SetConsoleMode, SetStdHandle}};
 
 use crate::ipc;
-use crate::protocol::{ClientMessage, ServerMessage};
+use crate::protocol::{ClientMessage, ContextEvent, ServerMessage};
 use crate::render::View;
 use crate::windows_input::{InputCommand, InputEvent, WindowsInput};
 
@@ -123,6 +123,13 @@ async fn interact(writer: &mut WriteHalf<NamedPipeClient>, incoming: &mut mpsc::
                         view.input(context_id.clone(), content);
                         active = Some(context_id);
                         waiting = true;
+                    },
+                    Some(ServerMessage::Context { event: ContextEvent::OutboundEnd { context_id } }) => {
+                        view.event(ContextEvent::OutboundEnd { context_id: context_id.clone() })?;
+                        if active.as_ref() == Some(&context_id) && !view.has_pending_text(&context_id) {
+                            active = None;
+                            waiting = false;
+                        }
                     },
                     Some(ServerMessage::Context { event }) => view.event(event)?,
                     Some(ServerMessage::Rejected { context_id, reason }) => {

@@ -66,6 +66,7 @@
 ```json
 {   
     "context_type": "inbound",
+    "private": <bool>,
     "context_id": "<14digit_string>",
     "content": "<content>"
 }
@@ -136,6 +137,7 @@
 {
     "context_type": "outbound",
     "context_id": "<14digit_string>",
+    "private": <bool>,
     "chunk_id": <int>,
     "content_type": "<content_type>",
     "content": "<content>"
@@ -303,7 +305,8 @@ min_chars = 60                # 单 chunk 最小硬切分触发阈值
 ```json
 {
     "operation": "text.inbound",
-    "permanent": true,
+    "private": <bool>,
+    "permanent": <bool>,
     "inbound": {                
         "context_id": "<14digit_string>",   
         "peer_type": "<PeerType>",

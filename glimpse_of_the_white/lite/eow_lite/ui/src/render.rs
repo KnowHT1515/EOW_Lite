@@ -86,13 +86,13 @@ impl View {
 
     pub fn event(&mut self, event: ContextEvent) -> io::Result<()> {
         match event {
-            ContextEvent::Inbound { context_id, content } => {
+            ContextEvent::Inbound { context_id, content, .. } => {
                 let inbound: serde_json::Value = serde_json::from_str(&content).map_err(io::Error::other)?;
                 if let Some(content) = inbound.get("content").and_then(serde_json::Value::as_str) {
                     self.input(context_id, content.to_owned());
                 }
             },
-            ContextEvent::Outbound { context_id, chunk_id, content_type, content } => {
+            ContextEvent::Outbound { context_id, chunk_id, content_type, content, .. } => {
                 let message: &mut Message = self.output(&context_id);
                 if chunk_id >= message.next_chunk {
                     message.next_chunk = chunk_id + 1;
@@ -101,7 +101,11 @@ impl View {
                     }
                 }
             },
-            ContextEvent::OutboundEnd { context_id } => self.output(&context_id).ended = true,
+            ContextEvent::OutboundEnd { context_id } => {
+                if let Some(message) = self.messages.iter_mut().find(|message: &&mut Message| message.context_id == context_id && message.role == Role::Instance) {
+                    message.ended = true;
+                }
+            },
         }
         Ok(())
     }
@@ -119,6 +123,10 @@ impl View {
 
     pub fn complete(&self, context_id: &str) -> bool {
         self.messages.iter().any(|message: &Message| message.context_id == context_id && message.role == Role::Instance && message.ended && message.visible == message.content.len())
+    }
+
+    pub fn has_pending_text(&self, context_id: &str) -> bool {
+        self.messages.iter().any(|message: &Message| message.context_id == context_id && message.role == Role::Instance && message.visible < message.content.len())
     }
 
     pub fn scroll(&mut self, amount: isize, dimensions: (u16, u16)) {
