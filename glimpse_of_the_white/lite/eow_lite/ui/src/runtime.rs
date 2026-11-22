@@ -95,7 +95,7 @@ fn inbound(registry: &ModuleRegistry, content: &str) -> io::Result<EnvelopeLite>
     let source: &eow_lite_helper::EowLiteModule = registry.get("ui").ok_or_else(|| io::Error::other("missing UI module"))?;
     let mut envelope: EnvelopeLite = EnvelopeLite::build(EnvelopeLiteKind::Request, "core", source, "1.1", Payload::new()).map_err(io::Error::other)?;
     envelope.payload = serde_json::value::to_raw_value(&json!({
-        "operation": "text.inbound",
+        "operation": "core.llm_inbound",
         "private": false,
         "permanent": true,
         "inbound": {

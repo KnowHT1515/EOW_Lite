@@ -42,7 +42,7 @@
 }
 ```
 
-接收 `text.inbound` 请求后，`Core` 模块将 `LLM` 模型的 `<inbound>` 输入文本结构化为以下形态：
+接收 `core.llm_inbound` 请求后，`Core` 模块将 `LLM` 模型的 `<inbound>` 输入文本结构化为以下形态：
 
 ```json
 {
@@ -304,7 +304,7 @@ min_chars = 60                # 单 chunk 最小硬切分触发阈值
 
 ```json
 {
-    "operation": "text.inbound",
+    "operation": "core.llm_inbound",
     "private": <bool>,
     "permanent": <bool>,
     "inbound": {                
@@ -325,7 +325,7 @@ min_chars = 60                # 单 chunk 最小硬切分触发阈值
 
 ```json
 {
-    "operation": "text.push_prompt",
+    "operation": "core.llm_push_prompt",
     "module": "<module>",
     "prompt": "<prompt>"
 }

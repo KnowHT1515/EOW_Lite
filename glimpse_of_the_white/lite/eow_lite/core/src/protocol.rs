@@ -13,14 +13,14 @@ pub const SILENT_TAG: &str = "<k.action:silent/>";
 #[derive(Deserialize)]
 #[serde(tag = "operation", deny_unknown_fields)]
 pub enum Request {
-    #[serde(rename = "text.inbound")]
+    #[serde(rename = "core.llm_inbound")]
     Inbound {
         #[serde(default)]
         private: bool,
         permanent: bool,
         inbound: Inbound,
     },
-    #[serde(rename = "text.push_prompt")]
+    #[serde(rename = "core.llm_push_prompt")]
     PushPrompt { module: String, prompt: String },
 }
 
