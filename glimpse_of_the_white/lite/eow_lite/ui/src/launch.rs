@@ -37,7 +37,7 @@ impl Session {
             None
         }
         else {
-            Some(Command::new(executable).arg("--pipe").arg(&pipe).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).creation_flags(CREATE_NEW_CONSOLE).spawn()?)
+            Some(Command::new(executable).arg("--pipe").arg(&pipe).arg("--system-console").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).creation_flags(CREATE_NEW_CONSOLE).spawn()?)
         };
         let ready: io::Result<()> = match timeout(Duration::from_secs(10), async {
             server.connect().await?;

@@ -19,7 +19,7 @@ struct Console {
 
 impl Console {
 
-    fn open() -> io::Result<Self> {
+    fn open(system_console: bool) -> io::Result<Self> {
         let original: [HANDLE; 3] = unsafe { [GetStdHandle(STD_INPUT_HANDLE), GetStdHandle(STD_OUTPUT_HANDLE), GetStdHandle(STD_ERROR_HANDLE)] };
         let input: File = OpenOptions::new().read(true).write(true).open("CONIN$")?;
         let output: File = OpenOptions::new().read(true).write(true).open("CONOUT$")?;
@@ -34,7 +34,10 @@ impl Console {
         }
         let console: Self = Self { original, input_mode, _input: input, _output: output };
         force_color_output(true);
-        let mode: u32 = (input_mode | ENABLE_EXTENDED_FLAGS | ENABLE_WINDOW_INPUT) & !(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT | ENABLE_QUICK_EDIT_MODE | ENABLE_VIRTUAL_TERMINAL_INPUT);
+        let mut mode: u32 = (input_mode | ENABLE_EXTENDED_FLAGS | ENABLE_WINDOW_INPUT) & !(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT | ENABLE_QUICK_EDIT_MODE | ENABLE_VIRTUAL_TERMINAL_INPUT);
+        if system_console {
+            mode |= ENABLE_QUICK_EDIT_MODE;
+        }
         if unsafe { SetConsoleMode(console._input.as_raw_handle(), mode) } == 0 {
             return Err(io::Error::last_os_error());
         }
@@ -74,11 +77,13 @@ pub async fn run() -> io::Result<()> {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "this frontend must be started by eow-lite-ui"));
     }
     let name: std::ffi::OsString = arguments.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing UI pipe"))?;
-    if arguments.next().is_some() {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "unexpected frontend argument"));
-    }
+    let system_console: bool = match arguments.next().as_deref() {
+        None => false,
+        Some(argument) if argument == std::ffi::OsStr::new("--system-console") && arguments.next().is_none() => true,
+        _ => return Err(io::Error::new(io::ErrorKind::InvalidInput, "unexpected frontend argument")),
+    };
     let client: NamedPipeClient = ClientOptions::new().open(name)?;
-    let _console: Console = Console::open()?;
+    let _console: Console = Console::open(system_console)?;
     let (mut input, mut writer): (ReadHalf<NamedPipeClient>, WriteHalf<NamedPipeClient>) = tokio::io::split(client);
     let (sender, mut incoming): (mpsc::UnboundedSender<io::Result<ServerMessage>>, mpsc::UnboundedReceiver<io::Result<ServerMessage>>) = mpsc::unbounded_channel();
     let _reader: Reader = Reader(tokio::spawn(async move {
@@ -152,10 +157,6 @@ async fn interact(writer: &mut WriteHalf<NamedPipeClient>, incoming: &mut mpsc::
                     Some(InputEvent::Command { command, repeat }) => {
                         for _ in 0..repeat {
                             match command {
-                                InputCommand::Close => {
-                                    let _ = ipc::send(writer, &ClientMessage::Close).await;
-                                    return Ok(());
-                                },
                                 InputCommand::ScrollUp => view.scroll(-1, dimensions),
                                 InputCommand::ScrollDown => view.scroll(1, dimensions),
                                 InputCommand::PageUp => view.scroll(-(dimensions.1.saturating_sub(2) as isize), dimensions),

@@ -58,7 +58,7 @@ async fn receive(session: &mut Session, binding: &Binding, registry: &ModuleRegi
                         }
                     },
                     Some(ClientMessage::Ready) => {},
-                    Some(ClientMessage::Close) | None => return Ok(()),
+                    None => return Ok(()),
                 }
             },
             envelope = binding.recv() => {

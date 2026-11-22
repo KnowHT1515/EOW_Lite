@@ -23,7 +23,6 @@ pub enum InputCommand {
     PageUp,
     PageDown,
     Submit,
-    Close,
 }
 
 pub struct WindowsInput {
@@ -117,7 +116,7 @@ impl InputDecoder {
         let alt: bool = key.dwControlKeyState & (LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED) != 0;
         if unit == 3 || (key.wVirtualKeyCode == VK_C && control && !alt) {
             self.high_surrogate = None;
-            return Some(InputEvent::Command { command: InputCommand::Close, repeat: 1 });
+            return None;
         }
         if control || alt {
             return if control && alt && unit != 0 { self.text(unit, key.wRepeatCount) } else { None };

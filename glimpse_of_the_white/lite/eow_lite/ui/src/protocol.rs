@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 pub enum ClientMessage {
     Ready,
     Input { content: String },
-    Close,
 }
 
 #[derive(Deserialize, Serialize)]
