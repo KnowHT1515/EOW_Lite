@@ -44,7 +44,7 @@ async fn receive(session: &mut Session, binding: &Binding, registry: &ModuleRegi
                             session.send(&ServerMessage::Notice { message: "Waiting for the current response".into() }).await?;
                             continue;
                         }
-                        if content.trim().is_empty() {
+                        if content.is_empty() {
                             continue;
                         }
                         let envelope: EnvelopeLite = inbound(registry, &content)?;
@@ -75,7 +75,7 @@ async fn receive(session: &mut Session, binding: &Binding, registry: &ModuleRegi
                     },
                     EnvelopeKind::Event if envelope.source == "core" && envelope.target == "core.llm_context" && envelope.payload_schema == "core@1.1" => {
                         let event: ContextEvent = serde_json::from_str(envelope.payload.get()).map_err(io::Error::other)?;
-                        if let ContextEvent::OutboundEnd { context_id } = &event
+                        if let ContextEvent::OutboundEnd { context_id, .. } = &event
                             && pending.as_ref() == Some(context_id) {
                             pending = None;
                         }

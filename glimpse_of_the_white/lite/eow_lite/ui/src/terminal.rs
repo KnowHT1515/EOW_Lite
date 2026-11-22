@@ -6,7 +6,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use windows_sys::Win32::{Foundation::HANDLE, System::Console::{ENABLE_ECHO_INPUT, ENABLE_EXTENDED_FLAGS, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_QUICK_EDIT_MODE, ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_WINDOW_INPUT, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, GetConsoleMode, GetStdHandle, SetConsoleMode, SetStdHandle}};
 
 use crate::ipc;
-use crate::protocol::{ClientMessage, ContextEvent, ServerMessage};
+use crate::protocol::{ClientMessage, ServerMessage};
 use crate::render::View;
 use crate::windows_input::{InputCommand, InputEvent, WindowsInput};
 
@@ -120,6 +120,7 @@ async fn interact(writer: &mut WriteHalf<NamedPipeClient>, incoming: &mut mpsc::
     view.draw(&mut output, &input, cursor, dimensions)?;
     loop {
         let was_typing: bool = view.typing();
+        let wake_at: Option<Instant> = view.missing_deadline().into_iter().chain(was_typing.then_some(tick)).min();
         tokio::select! {
             message = incoming.recv() => {
                 match message.transpose()? {
@@ -129,14 +130,7 @@ async fn interact(writer: &mut WriteHalf<NamedPipeClient>, incoming: &mut mpsc::
                         active = Some(context_id);
                         waiting = true;
                     },
-                    Some(ServerMessage::Context { event: ContextEvent::OutboundEnd { context_id } }) => {
-                        view.event(ContextEvent::OutboundEnd { context_id: context_id.clone() })?;
-                        if active.as_ref() == Some(&context_id) && !view.has_pending_text(&context_id) {
-                            active = None;
-                            waiting = false;
-                        }
-                    },
-                    Some(ServerMessage::Context { event }) => view.event(event)?,
+                    Some(ServerMessage::Context { event }) => view.event(event, Instant::now())?,
                     Some(ServerMessage::Rejected { context_id, reason }) => {
                         view.notice(format!("Request rejected: {reason}"));
                         if active.as_ref() == Some(&context_id) {
@@ -161,7 +155,7 @@ async fn interact(writer: &mut WriteHalf<NamedPipeClient>, incoming: &mut mpsc::
                                 InputCommand::ScrollDown => view.scroll(1, dimensions),
                                 InputCommand::PageUp => view.scroll(-(dimensions.1.saturating_sub(2) as isize), dimensions),
                                 InputCommand::PageDown => view.scroll(dimensions.1.saturating_sub(2) as isize, dimensions),
-                                InputCommand::Submit if ready && !waiting && !input.trim().is_empty() => {
+                                InputCommand::Submit if ready && !waiting && !input.is_empty() => {
                                     ipc::send(writer, &ClientMessage::Input { content: std::mem::take(&mut input) }).await?;
                                     cursor = 0;
                                     waiting = true;
@@ -175,15 +169,17 @@ async fn interact(writer: &mut WriteHalf<NamedPipeClient>, incoming: &mut mpsc::
                 }
             },
             _ = async {
-                if was_typing {
-                    sleep_until(tick).await;
-                }
-                else {
-                    pending::<()>().await;
+                match wake_at {
+                    Some(deadline) => sleep_until(deadline).await,
+                    None => pending::<()>().await,
                 }
             } => {
-                view.advance();
-                tick = next_tick();
+                let now: Instant = Instant::now();
+                view.expire_missing(now);
+                if was_typing && tick <= now {
+                    view.advance();
+                    tick = next_tick();
+                }
             },
         }
         if !was_typing && view.typing() {

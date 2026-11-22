@@ -35,7 +35,7 @@ pub enum ContextEvent {
         content_type: ContentType,
         content: String,
     },
-    OutboundEnd { context_id: String },
+    OutboundEnd { context_id: String, chunk_count: usize },
 }
 
 #[derive(Deserialize, Serialize)]
