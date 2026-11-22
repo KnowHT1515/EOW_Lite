@@ -93,6 +93,7 @@ pub enum ContextEvent<'a> {
     },
     OutboundEnd {
         context_id: &'a str,
+        chunk_count: usize,
     },
 }
 

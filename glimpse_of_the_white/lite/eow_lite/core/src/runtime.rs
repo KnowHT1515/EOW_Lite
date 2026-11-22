@@ -225,10 +225,12 @@ struct Turn {
 impl Turn {
 
     async fn run(self) -> io::Result<CompletedTurn> {
-        let result: io::Result<String> = self.generate().await;
+        let mut next_id: usize = 0;
+        let result: io::Result<String> = self.generate(&mut next_id).await;
         let end: io::Result<()> = self.channel
             .event(ContextEvent::OutboundEnd {
                 context_id: &self.inbound.context_id,
+                chunk_count: next_id,
             })
             .await;
         let outbound: String = result?;
@@ -240,7 +242,7 @@ impl Turn {
         })
     }
 
-    async fn generate(&self) -> io::Result<String> {
+    async fn generate(&self, next_id: &mut usize) -> io::Result<String> {
         self.channel
             .event(ContextEvent::Inbound {
                 private: self.private,
@@ -248,15 +250,14 @@ impl Turn {
                 content: &self.compact,
             })
             .await?;
-        let mut next_id: usize = 0;
         if self.inbound.silent {
-            self.publish_complete(SILENT_TAG, &mut next_id).await?;
+            self.publish_complete(SILENT_TAG, next_id).await?;
             return Ok(SILENT_TAG.into());
         }
         let response: reqwest::Response = self.model.start(&self.messages).await?;
         if !self.model.streaming() {
             let outbound: String = http::complete(response).await?;
-            self.publish_complete(&outbound, &mut next_id).await?;
+            self.publish_complete(&outbound, next_id).await?;
             return Ok(outbound);
         }
 
@@ -278,14 +279,14 @@ impl Turn {
                         .chunks(
                             &self.inbound.context_id,
                             self.private,
-                            &mut next_id,
+                            next_id,
                             splitter.push_str(&content),
                         )
                         .await?;
                 }
                 if delta.finished {
                     self.channel
-                        .chunks(&self.inbound.context_id, self.private, &mut next_id, splitter.finish())
+                        .chunks(&self.inbound.context_id, self.private, next_id, splitter.finish())
                         .await?;
                     return Ok(outbound);
                 }

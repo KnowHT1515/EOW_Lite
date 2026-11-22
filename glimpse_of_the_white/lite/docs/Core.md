@@ -153,11 +153,12 @@
 ```json
 {
     "context_type": "outbound_end",
-    "context_id": "<14digit_string>"
+    "context_id": "<14digit_string>",
+    "chunk_count": <int>
 }
 ```
 
-其中 `context_id` 的值为该轮 `Outbound` 所对应 `Inbound` 请求传入时生成的 `event_id`，一轮完整的 `Inbound` + `Outbound` 中所有相关事件的 `context_id` 恒相同
+其中 `context_id` 的值为该轮 `Outbound` 所对应 `Inbound` 请求传入时生成的 `event_id`，一轮完整的 `Inbound` + `Outbound` 中所有相关事件的 `context_id` 恒相同。`chunk_count` 代表本轮输出中所发布的 `context_type:outbound` 事件的总数
 
 ### Context
 
